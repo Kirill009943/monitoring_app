@@ -1,45 +1,114 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
+# ============================================================
+# Flutter / Dart
+# ============================================================
 
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
-.idea/
-
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
 .dart_tool/
+.packages
+.pub/
+build/
 .flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
-.pub/
-/build/
 
-# Symbolication related
-app.*.symbols
+# Generated files
+**/generated_plugin_registrant.dart
 
-# Obfuscation related
-app.*.map.json
+# Flutter crash logs
+crashlytics-build.properties
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# ============================================================
+# Android / Gradle
+# ============================================================
+
+.gradle/
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local Gradle configuration
+local.properties
+
+# Gradle generated files
+*.gradle
+!gradle-wrapper.jar
+
+# ============================================================
+# Android Studio / IntelliJ IDEA
+# ============================================================
+
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Android Studio caches
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/misc.xml
+.idea/vcs.xml
+
+# ============================================================
+# Kotlin
+# ============================================================
+
+# Kotlin compiler output
+.kotlin/
+*.kotlin_module
+
+# ============================================================
+# VS Code
+# ============================================================
+
+.vscode/
+
+# ============================================================
+# OS
+# ============================================================
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================================
+# Logs / temporary files
+# ============================================================
+
+*.log
+*.tmp
+*.temp
+
+# ============================================================
+# Android signing keys
+# ============================================================
+
+*.jks
+*.keystore
+
+# ============================================================
+# Environment / secrets
+# ============================================================
+
+.env
+.env.*
+!.env.example
+
+# ============================================================
+# Firebase / Google secrets
+# ============================================================
+
+# Service account credentials
+service-account*.json
+*-service-account*.json
+
+# ============================================================
+# Generated Android files
+# ============================================================
+
+android/.gradle/
+android/app/build/
+android/build/
+android/.cxx/
+android/local.properties
