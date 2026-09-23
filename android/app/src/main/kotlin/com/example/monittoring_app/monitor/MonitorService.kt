@@ -14,6 +14,7 @@ import com.example.monittoring_app.bridges.ThermalReader
 import com.example.monittoring_app.bridges.UsageReader
 import com.example.monittoring_app.bridges.getIntSafe
 import java.util.Calendar
+import org.json.JSONArray
 import org.json.JSONObject
 
 class MonitorService : Service() {
@@ -127,11 +128,7 @@ class MonitorService : Service() {
         val now = System.currentTimeMillis()
         val rows = ArrayList<DbHelper.SampleRow>()
 
-        val monitored = try {
-            prefs.getStringSet("flutter.monitored_sensors", emptySet()) ?: emptySet()
-        } catch (e: Exception) {
-            emptySet()
-        }
+        val monitored = readMonitoredSensors()
         val thresholds = parseDoubleMap("flutter.temp_thresholds")
         if (monitored.isNotEmpty()) {
             for (z in thermal.readZones(monitored.toList())) {
@@ -194,6 +191,25 @@ class MonitorService : Service() {
             )
         } catch (t: Throwable) {
             // notification updates are cosmetic
+        }
+    }
+
+    private fun readMonitoredSensors(): Set<String> {
+        // Dart writes the selection twice: the plugin's list format (not
+        // readable here on all plugin versions) and a plain JSON array.
+        prefs.getString("flutter.monitored_sensors_json", null)?.let { s ->
+            try {
+                val arr = JSONArray(s)
+                val out = LinkedHashSet<String>()
+                for (i in 0 until arr.length()) out.add(arr.getString(i))
+                return out
+            } catch (e: Exception) {
+            }
+        }
+        return try {
+            prefs.getStringSet("flutter.monitored_sensors", emptySet()) ?: emptySet()
+        } catch (e: Exception) {
+            emptySet()
         }
     }
 

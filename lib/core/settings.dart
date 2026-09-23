@@ -100,8 +100,19 @@ class SettingsProvider extends ChangeNotifier {
     } else {
       set.remove(zone);
     }
-    await _prefs.setStringList('monitored_sensors', set.toList()..sort());
+    final list = set.toList()..sort();
+    await _prefs.setStringList('monitored_sensors', list);
+    // the service reads this JSON form — the plugin's native list encoding
+    // is not readable via SharedPreferences.getStringSet on all versions
+    await _prefs.setString('monitored_sensors_json', jsonEncode(list));
     notifyListeners();
+  }
+
+  Future<void> ensureSensorJsonSynced() async {
+    if (_prefs.getString('monitored_sensors_json') == null) {
+      final list = monitoredSensors.toList()..sort();
+      await _prefs.setString('monitored_sensors_json', jsonEncode(list));
+    }
   }
 
   Map<String, double> get tempThresholds {
