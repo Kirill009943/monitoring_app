@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -136,12 +138,23 @@ class _MetricExplorerState extends State<MetricExplorer> {
   MetricRef? _metric;
   StatsRange _range = StatsRange.day;
   int _reload = 0;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _metric = widget.initial ??
         (widget.metrics.isNotEmpty ? widget.metrics.first : null);
+    // background recording continues while the page is open; keep the
+    // graph in sync without any user action
+    _refreshTimer = Timer.periodic(
+        const Duration(seconds: 30), (_) => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _customize() async {
@@ -232,7 +245,12 @@ class _MetricExplorerState extends State<MetricExplorer> {
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: MetricChart(data: d.points, prefs: prefs),
+                  child: MetricChart(
+                    data: d.points,
+                    prefs: prefs,
+                    unit: d.unit,
+                    formatTs: _fmtTs,
+                  ),
                 ),
                 if (d.points.isNotEmpty) ...[
                   const SizedBox(height: 8),

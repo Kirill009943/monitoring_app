@@ -1,5 +1,17 @@
 import 'package:flutter/services.dart';
 
+class MonitorStatus {
+  final bool running;
+  final int lastTickMs;
+  final String? lastError;
+
+  const MonitorStatus({
+    required this.running,
+    required this.lastTickMs,
+    required this.lastError,
+  });
+}
+
 class MonitorApi {
   static const MethodChannel _ch = MethodChannel('monittoring/monitor');
 
@@ -24,6 +36,20 @@ class MonitorApi {
       return await _ch.invokeMethod<bool>('isMonitorRunning') ?? false;
     } catch (_) {
       return false;
+    }
+  }
+
+  static Future<MonitorStatus> status() async {
+    try {
+      final res = await _ch.invokeMethod<Map<dynamic, dynamic>>('monitorStatus');
+      return MonitorStatus(
+        running: res?['running'] as bool? ?? false,
+        lastTickMs: (res?['lastTickMs'] as num?)?.toInt() ?? 0,
+        lastError: res?['lastError'] as String?,
+      );
+    } catch (_) {
+      return const MonitorStatus(
+          running: false, lastTickMs: 0, lastError: null);
     }
   }
 

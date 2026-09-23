@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
+import androidx.core.app.NotificationManagerCompat
 import java.util.Locale
 
 class NotifyHub(private val context: Context) {
@@ -83,7 +84,7 @@ class NotifyHub(private val context: Context) {
         return ch
     }
 
-    fun buildServiceNotification(sensorCount: Int, appCount: Int): Notification {
+    fun buildServiceNotification(sensorCount: Int, appCount: Int, tickTime: String): Notification {
         ensureServiceChannel()
         val pi = launchPendingIntent(0)
         val builder = if (Build.VERSION.SDK_INT >= 26) {
@@ -93,7 +94,7 @@ class NotifyHub(private val context: Context) {
         }
         return builder
             .setContentTitle("Phone Monitor")
-            .setContentText("Monitoring $sensorCount sensors · $appCount apps")
+            .setContentText("Monitoring $sensorCount sensors · $appCount apps · $tickTime")
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
             .setOngoing(true)
             .setContentIntent(pi)
@@ -112,6 +113,9 @@ class NotifyHub(private val context: Context) {
     }
 
     fun sendTest(kind: String): Boolean {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            return false
+        }
         return try {
             refreshAlertChannels()
             if (kind == "temp") {

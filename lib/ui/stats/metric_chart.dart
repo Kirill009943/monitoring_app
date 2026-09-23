@@ -8,8 +8,16 @@ import '../common/widgets.dart';
 class MetricChart extends StatelessWidget {
   final List<TimeValue> data;
   final GraphPrefs prefs;
+  final String unit;
+  final String Function(int ts)? formatTs;
 
-  const MetricChart({super.key, required this.data, required this.prefs});
+  const MetricChart({
+    super.key,
+    required this.data,
+    required this.prefs,
+    this.unit = '',
+    this.formatTs,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -32,6 +40,12 @@ class MetricChart extends StatelessWidget {
     );
   }
 
+  String _label(double value, int ts) {
+    final v = '${value.toStringAsFixed(1)}${unit.isEmpty ? '' : ' $unit'}';
+    final t = formatTs?.call(ts);
+    return t == null ? v : '$v\n$t';
+  }
+
   Widget _line(Color color, Border border) {
     return LineChart(
       LineChartData(
@@ -40,7 +54,22 @@ class MetricChart extends StatelessWidget {
         gridData: FlGridData(show: prefs.showGrid),
         borderData: FlBorderData(show: true, border: border),
         titlesData: const FlTitlesData(show: false),
-        lineTouchData: const LineTouchData(enabled: false),
+        lineTouchData: LineTouchData(
+          enabled: true,
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipItems: (spots) => [
+              for (final s in spots)
+                LineTooltipItem(
+                  _label(s.y, s.x.toInt()),
+                  const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
+          ),
+        ),
         lineBarsData: [
           LineChartBarData(
             spots: [
@@ -74,7 +103,20 @@ class MetricChart extends StatelessWidget {
         gridData: FlGridData(show: prefs.showGrid),
         borderData: FlBorderData(show: true, border: border),
         titlesData: const FlTitlesData(show: false),
-        barTouchData: const BarTouchData(enabled: false),
+        barTouchData: BarTouchData(
+          enabled: true,
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipItem: (group, groupIndex, rod, rodIndex) =>
+                BarTooltipItem(
+              _label(rod.toY, group.x),
+              const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
         barGroups: [
           for (final p in data)
             BarChartGroupData(

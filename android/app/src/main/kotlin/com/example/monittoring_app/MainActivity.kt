@@ -102,6 +102,13 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     }
                     "isMonitorRunning" -> result.success(MonitorService.running)
+                    "monitorStatus" -> result.success(
+                        hashMapOf<String, Any?>(
+                            "running" to MonitorService.running,
+                            "lastTickMs" to MonitorService.lastTickMs,
+                            "lastError" to MonitorService.lastError
+                        )
+                    )
                     "isIgnoringBatteryOptimizations" -> {
                         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
                         result.success(pm.isIgnoringBatteryOptimizations(packageName))

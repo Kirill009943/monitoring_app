@@ -5,8 +5,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
-import android.content.pm.ServiceInfo
-import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
@@ -23,6 +21,14 @@ class MonitorService : Service() {
     companion object {
         @Volatile
         var running = false
+            private set
+
+        @Volatile
+        var lastTickMs = 0L
+            private set
+
+        @Volatile
+        var lastError: String? = null
             private set
 
         private const val ALERT_COOLDOWN_MS = 10L * 60L * 1000L
@@ -46,45 +52,48 @@ class MonitorService : Service() {
     private val tempCooling = HashSet<String>()
     private val appAlertDay = HashMap<String, Int>()
     private var lastPruneMs = 0L
-    private var tickCount = 0
 
     private val tickRunnable = object : Runnable {
         override fun run() {
-            try {
-                tick()
-            } catch (t: Throwable) {
-                // a monitoring service must never crash on a tick
-            }
             val h = handler ?: return
             if (!prefs.getBoolean("flutter.monitoring_enabled", false)) {
                 stopSelf()
                 return
             }
+            // schedule the next tick BEFORE doing any work, so a failing
+            // tick can never break the chain
             val interval = prefs.getIntSafe("flutter.poll_interval_sec", 60).coerceIn(15, 600)
             h.postDelayed(this, interval * 1000L)
+            try {
+                tick()
+                lastTickMs = System.currentTimeMillis()
+                lastError = null
+            } catch (t: Throwable) {
+                lastError = (t.javaClass.simpleName + ": " + t.message).take(200)
+            }
         }
     }
 
     override fun onCreate() {
         super.onCreate()
-        prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         notifyHub = NotifyHub(this)
+        notifyHub.ensureServiceChannel()
+        val notif = notifyHub.buildServiceNotification(0, 0, "--:--")
+        try {
+            // the manifest already declares foregroundServiceType="specialUse";
+            // the 2-arg call uses it and is the most compatible across ROMs
+            startForeground(NotifyHub.SERVICE_NOTIF_ID, notif)
+        } catch (e: Exception) {
+            lastError = "startForeground: " + (e.message ?: e.javaClass.simpleName)
+            stopSelf()
+            return
+        }
+        prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         thermal = ThermalReader(this)
         battery = BatteryReader(this)
         usage = UsageReader(this)
         db = DbHelper(this)
-        notifyHub.ensureServiceChannel()
         notifyHub.refreshAlertChannels()
-        val notif = notifyHub.buildServiceNotification(0, 0)
-        if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(
-                NotifyHub.SERVICE_NOTIF_ID,
-                notif,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
-        } else {
-            startForeground(NotifyHub.SERVICE_NOTIF_ID, notif)
-        }
         val t = HandlerThread("monitor")
         t.start()
         thread = t
@@ -101,6 +110,10 @@ class MonitorService : Service() {
         thread?.quitSafely()
         thread = null
         handler = null
+        try {
+            db.close()
+        } catch (e: Exception) {
+        }
         super.onDestroy()
     }
 
@@ -114,7 +127,11 @@ class MonitorService : Service() {
         val now = System.currentTimeMillis()
         val rows = ArrayList<DbHelper.SampleRow>()
 
-        val monitored = prefs.getStringSet("flutter.monitored_sensors", emptySet()) ?: emptySet()
+        val monitored = try {
+            prefs.getStringSet("flutter.monitored_sensors", emptySet()) ?: emptySet()
+        } catch (e: Exception) {
+            emptySet()
+        }
         val thresholds = parseDoubleMap("flutter.temp_thresholds")
         if (monitored.isNotEmpty()) {
             for (z in thermal.readZones(monitored.toList())) {
@@ -167,17 +184,16 @@ class MonitorService : Service() {
             lastPruneMs = now
         }
 
-        tickCount++
-        if (tickCount % 5 == 1) {
-            try {
-                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                nm.notify(
-                    NotifyHub.SERVICE_NOTIF_ID,
-                    notifyHub.buildServiceNotification(monitored.size, tracked.size)
-                )
-            } catch (t: Throwable) {
-                // notification updates are cosmetic
-            }
+        try {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val cal = Calendar.getInstance()
+            val time = "%02d:%02d".format(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE))
+            nm.notify(
+                NotifyHub.SERVICE_NOTIF_ID,
+                notifyHub.buildServiceNotification(monitored.size, tracked.size, time)
+            )
+        } catch (t: Throwable) {
+            // notification updates are cosmetic
         }
     }
 

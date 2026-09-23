@@ -13,7 +13,11 @@ Future<void> setMonitoring(BuildContext context, bool on) async {
     } else {
       await MonitorApi.stopMonitor();
     }
-  } catch (_) {
-    // service state is polled by the UI; nothing else to do here
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not ${on ? 'start' : 'stop'} the service: $e')),
+      );
+    }
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -24,11 +25,13 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   Timer? _timer;
+  Timer? _healTimer;
   int _tick = 0;
 
   Map<String, double> _temps = {};
   BatteryInfo? _battery;
-  bool _serviceRunning = false;
+  MonitorStatus _status =
+      const MonitorStatus(running: false, lastTickMs: 0, lastError: null);
   Map<String, int> _usageToday = {};
 
   @override
@@ -36,11 +39,26 @@ class _DashboardPageState extends State<DashboardPage> {
     super.initState();
     _refresh();
     _timer = Timer.periodic(const Duration(seconds: 3), (_) => _refresh());
+    // If monitoring is enabled but the system killed the service, restart it —
+    // delayed so it never fights app startup, and re-armed every time this
+    // page is created (tab switches dispose it).
+    _healTimer = Timer(const Duration(seconds: 10), _healOnce);
+  }
+
+  Future<void> _healOnce() async {
+    try {
+      final settings = context.read<SettingsProvider>();
+      if (!settings.monitoringEnabled) return;
+      if (await MonitorApi.isMonitorRunning()) return;
+      await MonitorApi.startMonitor();
+      _refresh();
+    } catch (_) {}
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _healTimer?.cancel();
     super.dispose();
   }
 
@@ -51,7 +69,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
     Map<String, double> temps = _temps;
     BatteryInfo? battery = _battery;
-    bool running = _serviceRunning;
+    MonitorStatus status = _status;
     Map<String, int> usage = _usageToday;
 
     if (monitored.isNotEmpty) {
@@ -65,15 +83,8 @@ class _DashboardPageState extends State<DashboardPage> {
       battery = await BatteryApi.getInfo();
     } catch (_) {}
     try {
-      running = await MonitorApi.isMonitorRunning();
+      status = await MonitorApi.status();
     } catch (_) {}
-    if (settings.monitoringEnabled && !running) {
-      // auto-heal: system may have killed the service since
-      try {
-        await MonitorApi.startMonitor();
-        running = await MonitorApi.isMonitorRunning();
-      } catch (_) {}
-    }
 
     _tick++;
     if (_tick % 5 == 1 && settings.trackedApps.isNotEmpty) {
@@ -91,9 +102,15 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() {
       _temps = temps;
       _battery = battery;
-      _serviceRunning = running;
+      _status = status;
       _usageToday = usage;
     });
+  }
+
+  String _fmtTick(int ms) {
+    final d = DateTime.fromMillisecondsSinceEpoch(ms);
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '${two(d.hour)}:${two(d.minute)}:${two(d.second)}';
   }
 
   @override
@@ -127,21 +144,29 @@ class _DashboardPageState extends State<DashboardPage> {
               child: Row(
                 children: [
                   Icon(
-                    _serviceRunning
+                    _status.running && _status.lastError == null
                         ? Icons.check_circle_outline
-                        : Icons.pause_circle_outline,
-                    color: _serviceRunning
-                        ? Colors.greenAccent
-                        : Theme.of(context).colorScheme.outline,
+                        : _status.lastError != null
+                            ? Icons.error_outline
+                            : Icons.pause_circle_outline,
+                    color: _status.lastError != null
+                        ? Theme.of(context).colorScheme.error
+                        : _status.running
+                            ? Colors.greenAccent
+                            : Theme.of(context).colorScheme.outline,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      _serviceRunning
-                          ? 'Recording every ${settings.pollIntervalSec} s · keeping ${settings.retentionDays} days'
-                          : settings.monitoringEnabled
-                              ? 'Starting…'
-                              : 'Off — nothing is being recorded',
+                      !settings.monitoringEnabled
+                          ? 'Off — nothing is being recorded'
+                          : _status.lastError != null
+                              ? 'Error: ${_status.lastError}'
+                              : _status.running && _status.lastTickMs > 0
+                                  ? 'Recording every ${settings.pollIntervalSec} s · last tick ${_fmtTick(_status.lastTickMs)}'
+                                  : _status.running
+                                      ? 'Service running, waiting for first tick…'
+                                      : 'Starting…',
                     ),
                   ),
                 ],
@@ -216,7 +241,8 @@ class _DashboardPageState extends State<DashboardPage> {
                           ListTile(
                             dense: true,
                             contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.android),
+                            leading: _AppIcon(
+                                base64Icon: settings.trackedAppIcons[pkg]),
                             title: Text(labels[pkg] ?? pkg),
                             subtitle: (tracked[pkg] ?? 0) > 0
                                 ? Text('limit ${formatMinutes(tracked[pkg]!)}')
@@ -234,6 +260,30 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       ),
     );
+  }
+}
+
+class _AppIcon extends StatelessWidget {
+  final String? base64Icon;
+
+  const _AppIcon({this.base64Icon});
+
+  @override
+  Widget build(BuildContext context) {
+    final b64 = base64Icon;
+    if (b64 == null || b64.isEmpty) return const Icon(Icons.android);
+    try {
+      return Image.memory(
+        base64Decode(b64),
+        width: 28,
+        height: 28,
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.android),
+      );
+    } catch (_) {
+      return const Icon(Icons.android);
+    }
   }
 }
 

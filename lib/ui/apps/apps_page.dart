@@ -204,7 +204,7 @@ class _AppsPageState extends State<AppsPage> with WidgetsBindingObserver {
                         value: isTracked,
                         onChanged: (v) => settings.setAppTracked(
                             app.packageName, v,
-                            label: app.label),
+                            label: app.label, iconBase64: app.iconBase64),
                       ),
                       onTap: isTracked
                           ? () => _editLimit(context, app, limit)
